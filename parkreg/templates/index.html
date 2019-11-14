@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="da">
+<head>
+    <meta charset="utf-8">
+
+    <title>ParkReg</title>
+
+    <link rel="stylesheet" href="/static/bootstrap-reboot.min.css">
+    <script type='text/javascript' src='/static/jquery.min.js'></script>
+
+    <style>
+    @font-face {
+      font-family: 'Open Sans';
+      font-style: normal;
+      font-weight: 400;
+      src: local('Open Sans Regular'), local('OpenSans-Regular'),
+           url('/static/open-sans-v17-latin-regular.woff2') format('woff2');
+    }
+
+    html {
+        touch-action: none;
+    }
+    body {
+        font-family: 'Open Sans', sans-serif;
+        color: #000;
+        user-select: none;
+        background-color: #D5D5D5;
+    }
+
+    #header {
+        background-color:#002546;
+        padding: 10px;
+    }
+
+    #header h1 {
+        text-align:center;
+        font-size:42px;
+        color: #fff;
+    }
+
+    .container {
+        width: 1100px;
+        margin:0 auto;
+    }
+
+    #parking-complete {
+        margin:0 auto;
+        width: 500px;
+    }
+
+    #parking-complete button {
+        font-size: 32px;
+        padding: 30px;
+        width: 100%;
+        background-color: #0D9602;
+        border: none;
+        color: #fff;
+        font-weight: bold;
+        border-radius: 5px;
+    }
+
+    #parking {
+        margin-top: 20px;
+    }
+
+    #parking div {
+        margin-bottom: 40px;
+    }
+
+    #info {
+        margin-top: 40px;
+        margin-bottom: 50px;
+    }
+
+    .keyboard {
+        width: 100%;
+    }
+    .keyboard {        
+        display: flex;
+        flex-wrap: wrap;
+    }
+    .keyboard button {
+        padding: 15px;
+        font-size: 35px;
+        flex: 1 0 8.3%;
+    }
+    .keyboard .input {
+        font-size: 60px;
+        width: 100%;
+        height: auto;
+        margin: 0;
+        padding-left: 10px;
+        border-radius: 0;
+    }
+
+    #reset-button {
+        margin-top: 40px;
+        text-align: center;
+    }
+    #button-reset {
+        font-size: 26px;
+        padding: 20px;
+        width: auto;
+        background-color: #646464;
+        border: none;
+        color: #fff;
+        font-weight: bold;     
+        border-radius: 5px;
+    }
+
+
+    .alert {
+        font-size:26px;
+        padding:20px;
+        margin-bottom:0;
+        line-height: 30px;
+        border-radius: 5px;
+    }
+    
+    .alert-error, .alert-success {
+        color: #000;
+    }
+    
+    .alert-error {
+        background-color: #FF8522;
+    }    
+
+    .alert-success {
+        background-color: #3BC54B;
+    }
+
+    </style>
+</head>    
+
+<body>
+
+    <div id="header">
+        {% if handler.get_argument('title', None) %}
+            <h1>{{escape(handler.get_argument('title'))}}</h1>
+        {% else %}        
+            <h1>Parkingerings registering</h1>
+        {% end %}
+    </div>
+
+
+    <div class="container">
+
+        <div id="info"></div>
+
+        <form method="POST" id="parking">
+            <input name="patient_id" value="" type="hidden" />
+            <div id="parking-number-plate" class="keyboard">
+                <h1>Nummerplade</h1>
+                <input 
+                    name="number_plate"
+                    class="input"  
+                    id="input-number-plate"
+                    onkeypress="return false;"
+                />
+                <button></button>
+                <script>
+                    for (let i = 1; i <= 9; i++) {
+                        document.write('<button>'+i+'</button>');
+                    }
+                </script>
+                <button>0</button>
+                <button value="backspace">⌫</button>
+                <script>
+                    let skip = [
+                        73, //I
+                        81, //Q
+                    ];
+                    for (let i = 65; i <= 90; i++) {
+                        if (skip.includes(i))
+                            continue;
+                        document.write('<button>'+
+                            String.fromCharCode(i)+
+                        '</button>');
+                    }
+                </script>
+            </div>
+
+            <div id="parking-mobile-number" class="keyboard">
+                <h1>Mobilnummer for kvittering</h1>
+                <input 
+                    name="mobile_number"
+                    class="input"  
+                    id="input-mobile-number"
+                    onkeypress="return false;"
+                />
+                <script>
+                    for (let i = 1; i <= 9; i++) {
+                        document.write('<button>'+i+'</button>');
+                    }
+                </script>
+                <button>0</button>
+                <button value="backspace">⌫</button>
+            </div>
+
+            <div id="parking-error"></div>
+            <div id="info"></div>
+
+            <div id="parking-complete">
+                <button type="submit">Registrer Parkering</button>
+            </div>
+        </form>
+
+        <div id="reset-button">
+            <button id="button-reset" value="">🡠 Tilbage</button>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        var resetTimerId = null;
+
+        function reset() {
+            $('#input-number-plate').val('');
+            $('#input-mobile-number').val('');
+            showParking();
+            clearInterval(resetTimerId);
+        }
+        
+        function startResetCountdown(seconds) {
+            clearInterval(resetTimerId);
+            $('#reset-button').show();
+            resetTimerId = setInterval(function(){
+                seconds--;
+                if (seconds <= 0) {
+                    clearInterval(resetTimerId);
+                    reset();
+                }
+            }, 1000);
+            return resetTimerId;
+        }
+
+        function hideAll() {
+            $('#reset-button').hide();
+            $('#info').hide();
+            $('.alert').text('');
+            $('.alert').hide();
+            $('#parking').hide();
+            $('#parking-error').text('');
+        }
+
+        function showParking() {
+            hideAll();
+            $('#parking').show();
+        }
+
+        function loadingSpinner() {
+            return '<center><h1>Vent venligst...</h1></center>';
+        }
+
+        function keyboardInput(input, obj) {
+            if ($(obj).text() == '') 
+                return;
+            if ($(obj).val() == 'clear') {
+                input.val('');
+                return;
+            }
+            if ($(obj).val() == 'backspace') {
+                input.val(input.val().substring(0, input.val().length - 1));
+                return;
+            }
+            input.val(input.val()+$(obj).text());
+        }
+
+        function showLoading() {
+            hideAll();     
+            $('#info').html(loadingSpinner());
+            $('#info').show();
+        }
+
+        $('#button-reset').on('ontouchstart click', function(e){
+            e.preventDefault();
+            reset();
+        });
+
+        $('.container').on('ontouchstart click', '.parking-start', function(e){
+            e.preventDefault();
+            showParking();
+        });
+
+        $('#parking-number-plate button').on('ontouchstart click', function(e){
+            e.preventDefault();
+            startResetCountdown(20);
+            let input = $('#input-number-plate');
+            if (input.val().length >= 7) {
+                input.val('');
+            }
+            keyboardInput(input, this);
+            return false;
+        });
+
+        $('#parking-mobile-number button').on('ontouchstart click', function(e){
+            e.preventDefault();
+            startResetCountdown(20);
+            let input = $('#input-mobile-number');            
+            if (input.val().length >= 8) {
+                input.val('');
+            }
+            keyboardInput(input, this);
+            return false;
+        });
+
+        $('#parking').submit(function(e){
+            e.preventDefault();            
+            if ($('#input-number-plate').val().length == 0) {
+                $('#parking-error').html(
+                    '<div class="alert alert-error">Indtast en nummerplade</div>'
+                );
+                return
+            }
+            if ($('#input-mobile-number').val() != '') {
+                if ($('#input-mobile-number').val().length != 8) {
+                    $('#parking-error').html(
+                        '<div class="alert alert-error">Indtast et validt mobilnummer</div>'
+                    );
+                    return
+                }
+            }
+            clearInterval(resetTimerId);
+            showLoading();
+            $.post('/', $(this).serialize())
+                .done(function(data) {
+                    $('#info').html('<div class="alert alert-success">'+data+'</div>');
+                })
+                .fail(function(xhr) {
+                    console.log(xhr.responseText);
+                    $('#info').html('<div class="alert alert-error">'+xhr.responseText+'</div>');
+                })
+                .always(function() {
+                    $('#input-number-plate').val('');
+                    $('#input-mobile-number').val('');
+                    startResetCountdown(15);
+                });
+        });
+
+        showParking();
+    </script>
+</body>
+</html>
